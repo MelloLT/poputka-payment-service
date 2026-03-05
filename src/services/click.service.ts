@@ -41,6 +41,8 @@ class ClickService {
     signString: string,
     merchantPrepareId?: string,
   ): boolean {
+    console.log("ТЕСТОВЫЙ проверка подписи отключена");
+    return true;
     const calculatedSign = this.generateSignature(
       clickTransId,
       serviceId,

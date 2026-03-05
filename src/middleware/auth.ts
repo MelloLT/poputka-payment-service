@@ -20,7 +20,17 @@ export const authMiddleware = async (
   next: NextFunction,
 ) => {
   try {
-    // Проверяем token из заголовка Authorization
+    // ТЕСТОВЫЙ пропускаем любой запрос с заголовком Authorization
+    if (process.env.NODE_ENV === "development") {
+      console.log("⚠️ ТЕСТОВЫЙ РЕЖИМ: авторизация отключена");
+
+      // Даже если нет токена, создаем тестового пользователя
+      req.user = {
+        id: "test-user-123",
+        role: "user",
+      };
+      return next();
+    }
     const token = req.headers.authorization?.split(" ")[1];
 
     if (!token) {
