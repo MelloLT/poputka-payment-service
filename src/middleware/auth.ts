@@ -24,7 +24,6 @@ export const authMiddleware = async (
     if (process.env.NODE_ENV === "development") {
       console.log("⚠️ ТЕСТОВЫЙ РЕЖИМ: авторизация отключена");
 
-      // Даже если нет токена, создаем тестового пользователя
       req.user = {
         id: "test-user-123",
         role: "user",

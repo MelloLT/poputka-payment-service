@@ -7,6 +7,7 @@ import {
   ClickCompleteResponse,
 } from "../types/click.types";
 import { sendSuccess, sendError } from "../utils/responseHelper";
+import Order from "../models/Order";
 
 export const clickController = {
   // Ручка для Prepare запроса
@@ -205,9 +206,25 @@ export const clickController = {
   // Ручка для создания платежа (c фронтенда)
   async createPayment(req: Request, res: Response) {
     try {
-      const { userId, orderId, amount } = req.body;
+      const userId = req.user!.id;
+      const { orderId } = req.body;
 
-      // Проверяем, нет ли уже такого платежа
+      // Находим заявку
+      const order = await Order.findOne({
+        where: { id: orderId, userId, status: "pending" },
+      });
+
+      if (!order) {
+        return sendError(res, "ORDER_NOT_FOUND_OR_NOT_PENDING", 404);
+      }
+
+      // Проверяем не истек ли срок
+      if (order.expiresAt < new Date()) {
+        await order.update({ status: "expired" });
+        return sendError(res, "ORDER_EXPIRED", 400);
+      }
+
+      // Проверяем, нет ли уже платежа для этой заявки
       const existingPayment = await Payment.findOne({
         where: { orderId, status: ["pending", "processing"] },
       });
@@ -215,23 +232,21 @@ export const clickController = {
       if (existingPayment) {
         return sendSuccess(res, {
           payment: existingPayment,
-          paymentUrl: clickService.getPaymentUrl(orderId, amount),
+          paymentUrl: clickService.getPaymentUrl(orderId, order.amount),
         });
       }
 
-      // Создаем новый платеж
+      // Создаем платеж
       const payment = await Payment.create({
         userId,
         orderId,
-        amount,
+        amount: order.amount,
         status: "pending",
       });
 
-      // Возвращаем данные для оплаты
       sendSuccess(res, {
         payment,
-        paymentUrl: clickService.getPaymentUrl(orderId, amount),
-        paymentForm: clickService.getPaymentForm(orderId, amount),
+        paymentUrl: clickService.getPaymentUrl(orderId, order.amount),
       });
     } catch (error) {
       console.error("Create payment error:", error);

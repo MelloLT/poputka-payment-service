@@ -3,29 +3,29 @@ import sequelize from "../config/database";
 import { generateId } from "../utils/idGenerator";
 
 export interface PaymentAttributes {
-  id: string; // Внутренний ID платежа
-  userId: string; // ID пользователя
-  orderId: string; // ID заказа
-  amount: number; // Сумма платежа
-  status: PaymentStatus; // Статус платежа
-  clickTransId?: string; // ID транзакции в Click (click_trans_id)
-  clickPaydocId?: string; // ID платежа в Click (click_paydoc_id)
-  merchantPrepareId?: number; // ID из Prepare запроса
-  merchantConfirmId?: string; // ID подтверждения
-  errorCode?: number; // Код ошибки от Click
-  errorNote?: string; // Описание ошибки
-  prepareTime?: Date; // Время Prepare запроса
-  completeTime?: Date; // Время Complete запроса
-  createdAt?: Date; // Время создания
-  updatedAt?: Date; // Время обновления
+  id: string;
+  userId: string;
+  orderId: string;
+  amount: number;
+  status: PaymentStatus;
+  clickTransId?: string;
+  clickPaydocId?: string;
+  merchantPrepareId?: number;
+  merchantConfirmId?: string;
+  errorCode?: number;
+  errorNote?: string;
+  prepareTime?: Date;
+  completeTime?: Date;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 export type PaymentStatus =
-  | "pending" // Создан, ожидает оплаты
-  | "processing" // В обработке
-  | "paid" // Оплачен успешно
-  | "cancelled" // Отменен
-  | "failed"; // Ошибка
+  | "pending"
+  | "processing"
+  | "paid"
+  | "cancelled"
+  | "failed";
 
 interface PaymentCreationAttributes extends Optional<
   PaymentAttributes,
@@ -78,6 +78,10 @@ Payment.init(
     orderId: {
       type: DataTypes.STRING,
       allowNull: false,
+      references: {
+        model: "orders",
+        key: "id",
+      },
     },
     amount: {
       type: DataTypes.FLOAT,
@@ -127,6 +131,16 @@ Payment.init(
     completeTime: {
       type: DataTypes.DATE,
       allowNull: true,
+    },
+    createdAt: {
+      type: DataTypes.DATE,
+      allowNull: false,
+      defaultValue: DataTypes.NOW,
+    },
+    updatedAt: {
+      type: DataTypes.DATE,
+      allowNull: false,
+      defaultValue: DataTypes.NOW,
     },
   },
   {
