@@ -1,4 +1,3 @@
-// src/models/Payment.ts
 import { DataTypes, Model, Optional } from "sequelize";
 import sequelize from "../config/database";
 import { generateId } from "../utils/idGenerator";
