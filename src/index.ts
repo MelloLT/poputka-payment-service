@@ -3,7 +3,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import sequelize from "./config/database";
 import paymentRoutes from "./routes/payment.routes";
-import "./models";
+import "./models/Payment";
 
 dotenv.config();
 
