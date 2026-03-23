@@ -1,3 +1,4 @@
+// src/models/Payment.ts
 import { DataTypes, Model, Optional } from "sequelize";
 import sequelize from "../config/database";
 import { generateId } from "../utils/idGenerator";
@@ -5,8 +6,10 @@ import { generateId } from "../utils/idGenerator";
 export interface PaymentAttributes {
   id: string;
   userId: string;
-  orderId: string;
+  tripId: string;
+  bookingId?: string;
   amount: number;
+  description?: string;
   status: PaymentStatus;
   clickTransId?: string;
   clickPaydocId?: string;
@@ -16,20 +19,24 @@ export interface PaymentAttributes {
   errorNote?: string;
   prepareTime?: Date;
   completeTime?: Date;
+  expiresAt: Date;
   createdAt?: Date;
   updatedAt?: Date;
 }
 
 export type PaymentStatus =
-  | "pending"
-  | "processing"
-  | "paid"
-  | "cancelled"
-  | "failed";
+  | "pending" // Создана, ожидает оплаты
+  | "processing" // После Prepare
+  | "paid" // Оплачена
+  | "cancelled" // Отменена пользователем
+  | "expired" // Истек срок
+  | "failed"; // Ошибка при оплате
 
 interface PaymentCreationAttributes extends Optional<
   PaymentAttributes,
   | "id"
+  | "bookingId"
+  | "description"
   | "clickTransId"
   | "clickPaydocId"
   | "merchantPrepareId"
@@ -38,6 +45,7 @@ interface PaymentCreationAttributes extends Optional<
   | "errorNote"
   | "prepareTime"
   | "completeTime"
+  | "expiresAt"
   | "createdAt"
   | "updatedAt"
 > {}
@@ -48,8 +56,10 @@ class Payment
 {
   public id!: string;
   public userId!: string;
-  public orderId!: string;
+  public tripId!: string;
+  public bookingId?: string;
   public amount!: number;
+  public description?: string;
   public status!: PaymentStatus;
   public clickTransId?: string;
   public clickPaydocId?: string;
@@ -59,6 +69,7 @@ class Payment
   public errorNote?: string;
   public prepareTime?: Date;
   public completeTime?: Date;
+  public expiresAt!: Date;
 
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
@@ -69,26 +80,32 @@ Payment.init(
     id: {
       type: DataTypes.STRING,
       primaryKey: true,
-      defaultValue: generateId,
+      defaultValue: () => `PAY${generateId()}`,
     },
     userId: {
       type: DataTypes.STRING,
       allowNull: false,
     },
-    orderId: {
+    tripId: {
       type: DataTypes.STRING,
       allowNull: false,
-      references: {
-        model: "orders",
-        key: "id",
-      },
+    },
+    bookingId: {
+      type: DataTypes.STRING,
+      allowNull: true,
     },
     amount: {
       type: DataTypes.FLOAT,
       allowNull: false,
       validate: {
-        min: 0,
+        isFloat: true,
+        min: 0.01,
+        isNumeric: true,
       },
+    },
+    description: {
+      type: DataTypes.STRING,
+      allowNull: true,
     },
     status: {
       type: DataTypes.ENUM(
@@ -96,6 +113,7 @@ Payment.init(
         "processing",
         "paid",
         "cancelled",
+        "expired",
         "failed",
       ),
       defaultValue: "pending",
@@ -131,6 +149,11 @@ Payment.init(
     completeTime: {
       type: DataTypes.DATE,
       allowNull: true,
+    },
+    expiresAt: {
+      type: DataTypes.DATE,
+      allowNull: false,
+      defaultValue: () => new Date(Date.now() + 30 * 60 * 1000), // 30 минут
     },
     createdAt: {
       type: DataTypes.DATE,
