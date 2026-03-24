@@ -8,8 +8,7 @@ import "./models/Payment";
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 5001;
-
+const PORT = Number(process.env.PORT) || 5001;
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -31,7 +30,7 @@ const startServer = async () => {
     await sequelize.sync({ alter: true });
     console.log("Database synced");
 
-    app.listen(PORT, () => {
+    app.listen(PORT, "0.0.0.0", () => {
       console.log(`Payment service running on port ${PORT}`);
     });
   } catch (error) {
