@@ -3,25 +3,23 @@ import { ClickError } from "../types/click.types";
 
 class ClickService {
   private readonly secretKey: string;
-  private readonly serviceId: string;
-  private readonly merchantId: string;
+  private readonly serviceId: number;
+  private readonly merchantId: number;
 
   constructor() {
-    // Эти данные короче надо будет узнать от Click при регистрации
     this.secretKey = process.env.CLICK_SECRET_KEY || "";
-    this.serviceId = process.env.CLICK_SERVICE_ID || "";
-    this.merchantId = process.env.CLICK_MERCHANT_ID || "";
+    this.serviceId = parseInt(process.env.CLICK_SERVICE_ID || "0");
+    this.merchantId = parseInt(process.env.CLICK_MERCHANT_ID || "0");
   }
 
-  // Генерация подписи для проверки запросов от Click
   generateSignature(
-    clickTransId: string,
-    serviceId: string,
+    clickTransId: number | string,
+    serviceId: number | string,
     merchantTransId: string,
-    amount: string,
-    action: string,
+    amount: number | string,
+    action: number | string,
     signTime: string,
-    merchantPrepareId?: string,
+    merchantPrepareId?: number | string,
   ): string {
     const signString = merchantPrepareId
       ? `${clickTransId}${serviceId}${this.secretKey}${merchantTransId}${merchantPrepareId}${amount}${action}${signTime}`
@@ -30,19 +28,20 @@ class ClickService {
     return crypto.createHash("md5").update(signString).digest("hex");
   }
 
-  // Проверка подписи от Click
+  // Проверка подписи (в тестовом пропускаем)
   verifySignature(
-    clickTransId: string,
-    serviceId: string,
+    clickTransId: number | string,
+    serviceId: number | string,
     merchantTransId: string,
-    amount: string,
-    action: string,
+    amount: number | string,
+    action: number | string,
     signTime: string,
     signString: string,
-    merchantPrepareId?: string,
+    merchantPrepareId?: number | string,
   ): boolean {
-    console.log("ТЕСТОВЫЙ проверка подписи отключена");
     return true;
+
+    /* Для прода:
     const calculatedSign = this.generateSignature(
       clickTransId,
       serviceId,
@@ -50,12 +49,13 @@ class ClickService {
       amount,
       action,
       signTime,
-      merchantPrepareId,
+      merchantPrepareId
     );
     return calculatedSign === signString;
+    */
   }
 
-  // Проверка Prepare запроса
+  // Валидация Prepare запроса
   async validatePrepare(
     params: any,
   ): Promise<{ isValid: boolean; error?: ClickError }> {
@@ -69,14 +69,28 @@ class ClickService {
       sign_string,
     } = params;
 
+    const actionNum = Number(action);
+    const serviceIdNum = Number(service_id);
+    const amountNum = Number(amount);
+
     // Проверка action (должен быть 0)
-    if (action !== "0") {
+    if (actionNum !== 0) {
+      console.log(`Invalid action: ${actionNum}, expected 0`);
       return { isValid: false, error: ClickError.ACTION_NOT_FOUND };
     }
 
     // Проверка service_id
-    if (service_id !== this.serviceId) {
+    if (serviceIdNum !== this.serviceId) {
+      console.log(
+        `Invalid service_id: ${serviceIdNum}, expected ${this.serviceId}`,
+      );
       return { isValid: false, error: ClickError.BAD_REQUEST };
+    }
+
+    // Проверка суммы (должна быть положительной)
+    if (amountNum <= 0) {
+      console.log(`Invalid amount: ${amountNum}`);
+      return { isValid: false, error: ClickError.INVALID_AMOUNT };
     }
 
     // Проверка подписи
@@ -91,13 +105,14 @@ class ClickService {
     );
 
     if (!isValid) {
+      console.log("Signature check failed");
       return { isValid: false, error: ClickError.SIGN_CHECK_FAILED };
     }
 
     return { isValid: true };
   }
 
-  // Проверка Complete запроса
+  // Валидация Complete запроса
   async validateComplete(
     params: any,
   ): Promise<{ isValid: boolean; error?: ClickError }> {
@@ -112,13 +127,20 @@ class ClickService {
       sign_string,
     } = params;
 
+    const actionNum = Number(action);
+    const serviceIdNum = Number(service_id);
+
     // Проверка action (должен быть 1)
-    if (action !== "1") {
+    if (actionNum !== 1) {
+      console.log(`Invalid action: ${actionNum}, expected 1`);
       return { isValid: false, error: ClickError.ACTION_NOT_FOUND };
     }
 
     // Проверка service_id
-    if (service_id !== this.serviceId) {
+    if (serviceIdNum !== this.serviceId) {
+      console.log(
+        `Invalid service_id: ${serviceIdNum}, expected ${this.serviceId}`,
+      );
       return { isValid: false, error: ClickError.BAD_REQUEST };
     }
 
@@ -135,48 +157,40 @@ class ClickService {
     );
 
     if (!isValid) {
+      console.log("Signature check failed");
       return { isValid: false, error: ClickError.SIGN_CHECK_FAILED };
     }
 
     return { isValid: true };
   }
 
-  // Получить URL для кнопки оплаты (первый вариант - редирект)
-  getPaymentUrl(orderId: string, amount: number, returnUrl?: string): string {
+  getPaymentUrl(paymentId: string, amount: number): string {
     const baseUrl = "https://my.click.uz/services/pay";
     const params = new URLSearchParams({
-      service_id: this.serviceId,
-      merchant_id: this.merchantId,
+      service_id: this.serviceId.toString(),
+      merchant_id: this.merchantId.toString(),
       amount: amount.toFixed(2),
-      transaction_param: orderId,
+      transaction_param: paymentId,
     });
-
-    if (returnUrl) {
-      params.append("return_url", returnUrl);
-    }
-
     return `${baseUrl}?${params.toString()}`;
   }
 
   // Получить HTML форму для кнопки оплаты
   getPaymentForm(
-    orderId: string,
+    paymentId: string,
     amount: number,
     returnUrl?: string,
-    cardType?: "uzcard" | "humo",
   ): string {
-    const form = `
+    return `
       <form action="https://my.click.uz/services/pay" method="get" target="_blank">
         <input type="hidden" name="service_id" value="${this.serviceId}" />
         <input type="hidden" name="merchant_id" value="${this.merchantId}" />
         <input type="hidden" name="amount" value="${amount.toFixed(2)}" />
-        <input type="hidden" name="transaction_param" value="${orderId}" />
+        <input type="hidden" name="transaction_param" value="${paymentId}" />
         ${returnUrl ? `<input type="hidden" name="return_url" value="${returnUrl}" />` : ""}
-        ${cardType ? `<input type="hidden" name="card_type" value="${cardType}" />` : ""}
         <button type="submit" class="click-btn">Оплатить через CLICK</button>
       </form>
     `;
-    return form;
   }
 }
 

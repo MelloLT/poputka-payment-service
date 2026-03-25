@@ -200,73 +200,98 @@ export const paymentController = {
   async prepare(req: Request, res: Response) {
     try {
       const params = req.body;
-      console.log("Prepare request:", params);
+      console.log("Prepare request:", JSON.stringify(params, null, 2));
+
+      // Проверяем обязательные поля
+      if (
+        !params.click_trans_id ||
+        !params.service_id ||
+        !params.merchant_trans_id
+      ) {
+        console.error("Missing required fields");
+        return res.json({
+          click_trans_id: params.click_trans_id || 0,
+          merchant_trans_id: params.merchant_trans_id || "",
+          error: ClickError.BAD_REQUEST,
+          error_note: "Missing required fields",
+        });
+      }
 
       const validation = await clickService.validatePrepare(params);
       if (!validation.isValid) {
         return res.json({
-          click_trans_id: params.click_trans_id,
-          merchant_trans_id: params.merchant_trans_id,
+          click_trans_id: Number(params.click_trans_id),
+          merchant_trans_id: String(params.merchant_trans_id),
           error: validation.error,
-          error_note: "Invalid request",
+          error_note: "Validation failed",
         });
       }
 
-      const { merchant_trans_id, amount } = params;
+      const merchantTransId = String(params.merchant_trans_id);
+      const amountNum = Number(params.amount);
 
+      // Ищем платеж по ID (merchant_trans_id)
       const payment = await Payment.findOne({
-        where: { id: merchant_trans_id, status: "pending" },
+        where: { id: merchantTransId, status: ["pending", "processing"] },
       });
 
       if (!payment) {
+        console.log(`Payment not found: ${merchantTransId}`);
         return res.json({
-          click_trans_id: params.click_trans_id,
-          merchant_trans_id: merchant_trans_id,
-          error: ClickError.USER_NOT_FOUND,
+          click_trans_id: Number(params.click_trans_id),
+          merchant_trans_id: merchantTransId,
+          error: ClickError.TRANSACTION_NOT_FOUND,
           error_note: "Payment not found",
         });
       }
 
-      if (payment.expiresAt < new Date()) {
+      // Проверяем срок
+      if (payment.expiresAt && payment.expiresAt < new Date()) {
         await payment.update({ status: "expired" });
         return res.json({
-          click_trans_id: params.click_trans_id,
-          merchant_trans_id: merchant_trans_id,
-          error: ClickError.TRANSACTION_NOT_FOUND,
+          click_trans_id: Number(params.click_trans_id),
+          merchant_trans_id: merchantTransId,
+          error: ClickError.TRANSACTION_CANCELLED,
           error_note: "Payment expired",
         });
       }
 
-      if (payment.amount !== parseFloat(amount)) {
+      // Проверяем сумму
+      if (Math.abs(payment.amount - amountNum) > 0.01) {
+        console.log(
+          `Amount mismatch: expected ${payment.amount}, got ${amountNum}`,
+        );
         return res.json({
-          click_trans_id: params.click_trans_id,
-          merchant_trans_id: merchant_trans_id,
+          click_trans_id: Number(params.click_trans_id),
+          merchant_trans_id: merchantTransId,
           error: ClickError.INVALID_AMOUNT,
           error_note: "Amount mismatch",
         });
       }
 
+      // Обновляем платеж
       await payment.update({
-        clickTransId: params.click_trans_id,
-        clickPaydocId: params.click_paydoc_id,
+        clickTransId: String(params.click_trans_id),
+        clickPaydocId: String(params.click_paydoc_id),
         status: "processing",
         prepareTime: new Date(),
       });
 
-      console.log(`Prepare success: ${payment.id}`);
+      console.log(`Prepare success for payment ${payment.id}`);
 
       res.json({
-        click_trans_id: params.click_trans_id,
-        merchant_trans_id: merchant_trans_id,
-        merchant_prepare_id: parseInt(payment.id),
+        click_trans_id: Number(params.click_trans_id),
+        merchant_trans_id: merchantTransId,
+        merchant_prepare_id:
+          parseInt(payment.id.replace(/\D/g, "")) || Date.now(),
         error: ClickError.SUCCESS,
         error_note: "Success",
       });
     } catch (error) {
       console.error("Prepare error:", error);
       res.json({
-        click_trans_id: req.body.click_trans_id,
-        merchant_trans_id: req.body.merchant_trans_id,
+        click_trans_id: Number(req.body.click_trans_id) || 0,
+        merchant_trans_id: String(req.body.merchant_trans_id) || "",
         error: ClickError.INTERNAL_ERROR,
         error_note: "Internal error",
       });
@@ -277,59 +302,75 @@ export const paymentController = {
   async complete(req: Request, res: Response) {
     try {
       const params = req.body;
-      console.log("Complete request:", params);
+      console.log("Complete request:", JSON.stringify(params, null, 2));
 
       const validation = await clickService.validateComplete(params);
       if (!validation.isValid) {
         return res.json({
-          click_trans_id: params.click_trans_id,
-          merchant_trans_id: params.merchant_trans_id,
+          click_trans_id: Number(params.click_trans_id),
+          merchant_trans_id: String(params.merchant_trans_id),
           error: validation.error,
-          error_note: "Invalid request",
+          error_note: "Validation failed",
         });
       }
 
-      const { merchant_trans_id, merchant_prepare_id, error } = params;
+      const merchantTransId = String(params.merchant_trans_id);
+      const merchantPrepareId = Number(params.merchant_prepare_id);
+      const errorCode = Number(params.error);
 
-      const payment = await Payment.findOne({
+      let payment = await Payment.findOne({
         where: {
-          id: merchant_prepare_id,
+          id: merchantTransId,
           status: "processing",
         },
       });
 
       if (!payment) {
+        payment = await Payment.findOne({
+          where: {
+            clickTransId: String(params.click_trans_id),
+            status: "processing",
+          },
+        });
+      }
+
+      if (!payment) {
+        console.log(
+          `Payment not found: merchant_trans_id=${merchantTransId}, merchant_prepare_id=${merchantPrepareId}`,
+        );
         return res.json({
-          click_trans_id: params.click_trans_id,
-          merchant_trans_id: merchant_trans_id,
+          click_trans_id: Number(params.click_trans_id),
+          merchant_trans_id: merchantTransId,
           error: ClickError.TRANSACTION_NOT_FOUND,
           error_note: "Payment not found",
         });
       }
 
-      if (error !== "0") {
+      // Проверяем статус ошибки от Click
+      if (errorCode !== 0) {
         await payment.update({
           status: "failed",
-          errorCode: parseInt(error),
-          errorNote: params.error_note,
+          errorCode: errorCode,
+          errorNote: String(params.error_note || "Unknown error"),
           completeTime: new Date(),
         });
 
-        console.log(`Payment failed: ${payment.id}, error: ${error}`);
+        console.log(`Payment failed: ${payment.id}, error: ${errorCode}`);
 
         return res.json({
-          click_trans_id: params.click_trans_id,
-          merchant_trans_id: merchant_trans_id,
+          click_trans_id: Number(params.click_trans_id),
+          merchant_trans_id: merchantTransId,
           merchant_confirm_id: payment.id,
           error: ClickError.TRANSACTION_CANCELLED,
           error_note: "Payment failed",
         });
       }
 
+      // Успешный платеж
       await payment.update({
         status: "paid",
-        clickTransId: params.click_trans_id,
-        clickPaydocId: params.click_paydoc_id,
+        clickTransId: String(params.click_trans_id),
+        clickPaydocId: String(params.click_paydoc_id),
         completeTime: new Date(),
         errorCode: ClickError.SUCCESS,
       });
@@ -337,8 +378,8 @@ export const paymentController = {
       console.log(`Payment completed: ${payment.id}`);
 
       res.json({
-        click_trans_id: params.click_trans_id,
-        merchant_trans_id: merchant_trans_id,
+        click_trans_id: Number(params.click_trans_id),
+        merchant_trans_id: merchantTransId,
         merchant_confirm_id: payment.id,
         error: ClickError.SUCCESS,
         error_note: "Success",
@@ -346,8 +387,8 @@ export const paymentController = {
     } catch (error) {
       console.error("Complete error:", error);
       res.json({
-        click_trans_id: req.body.click_trans_id,
-        merchant_trans_id: req.body.merchant_trans_id,
+        click_trans_id: Number(req.body.click_trans_id) || 0,
+        merchant_trans_id: String(req.body.merchant_trans_id) || "",
         error: ClickError.INTERNAL_ERROR,
         error_note: "Internal error",
       });

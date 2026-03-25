@@ -1,20 +1,20 @@
 export interface ClickRequestParams {
-  click_trans_id: string; // ID транзакции в Click
-  service_id: string; // ID сервиса
-  click_paydoc_id: string; // ID платежа в Click
+  click_trans_id: number | string; // ID транзакции в Click
+  service_id: number | string; // ID сервиса
+  click_paydoc_id: number | string; // ID платежа в Click
   merchant_trans_id: string; // ID заказа в нашей системе (orderId)
-  amount: string; // Сумма
-  action: string; // 0 - Prepare, 1 - Complete
-  error: string; // Код ошибки
+  amount: number | string; // Сумма
+  action: number | string; // 0 - Prepare, 1 - Complete
+  error: number | string; // Код ошибки
   error_note: string; // Описание ошибки
   sign_time: string; // Время подписи
   sign_string: string; // Подпись
-  merchant_prepare_id?: string; // ID из Prepare (только для Complete)
+  merchant_prepare_id?: number | string; // ID из Prepare (только для Complete)
 }
 
 // Ответ на Prepare запрос
 export interface ClickPrepareResponse {
-  click_trans_id: string;
+  click_trans_id: number;
   merchant_trans_id: string;
   merchant_prepare_id: number; // Наш ID платежа
   error: number;
@@ -23,7 +23,7 @@ export interface ClickPrepareResponse {
 
 // Ответ на Complete запрос
 export interface ClickCompleteResponse {
-  click_trans_id: string;
+  click_trans_id: number;
   merchant_trans_id: string;
   merchant_confirm_id?: string; // ID подтверждения
   error: number;
