@@ -23,7 +23,7 @@ export const authMiddleware = async (
   try {
     // ТЕСТОВЫЙ пропускаем любой запрос с заголовком Authorization
     if (process.env.NODE_ENV === "development") {
-      console.log("⚠️ ТЕСТОВЫЙ РЕЖИМ: авторизация отключена");
+      console.log("ТЕСТОВЫЙ РЕЖИМ: авторизация отключена");
 
       req.user = {
         id: "test-user-123",
