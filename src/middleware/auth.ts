@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
+import cookie from "cookie";
 
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
 
@@ -30,7 +31,16 @@ export const authMiddleware = async (
       };
       return next();
     }
-    const token = req.headers.authorization?.split(" ")[1];
+    const cookies = req.headers.cookie;
+    if (!cookies) {
+      return res.status(401).json({
+        success: false,
+        code: "TOKEN_NOT_PROVIDED",
+      });
+    }
+
+    const parsedCookies = cookie.parse(cookies);
+    const token = parsedCookies.accessToken;
 
     if (!token) {
       return res.status(401).json({
