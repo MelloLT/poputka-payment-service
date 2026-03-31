@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import sequelize from "./config/database";
+import cookieParser from "cookie-parser";
 import paymentRoutes from "./routes/payment.routes";
 import "./models/Payment";
 
@@ -13,13 +14,14 @@ const PORT = Number(process.env.PORT) || 5001;
 app.use(
   cors({
     origin: (origin, callback) => {
-      callback(null, true); 
+      callback(null, true);
     },
-    credentials: true, 
+    credentials: true,
   }),
 );
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
 
 // Routes
 app.use("/api/payment", paymentRoutes);
