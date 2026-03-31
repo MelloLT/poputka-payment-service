@@ -22,26 +22,17 @@ export const authMiddleware = async (
 ) => {
   try {
     // ТЕСТОВЫЙ пропускаем любой запрос с заголовком Authorization
-    if (process.env.NODE_ENV === "development") {
-      console.log("ТЕСТОВЫЙ РЕЖИМ: авторизация отключена");
+    // if (process.env.NODE_ENV === "development") {
+    //   console.log("ТЕСТОВЫЙ РЕЖИМ: авторизация отключена");
 
-      req.user = {
-        id: "test-user-123",
-        role: "user",
-      };
-      return next();
-    }
-    const cookies = req.headers.cookie;
-    if (!cookies) {
-      return res.status(401).json({
-        success: false,
-        code: "TOKEN_NOT_PROVIDED",
-      });
-    }
+    //   req.user = {
+    //     id: "test-user-123",
+    //     role: "user",
+    //   };
+    //   return next();
+    // }
 
-    const parsedCookies = cookie.parse(cookies);
-    const token = parsedCookies.accessToken;
-
+    const token = req.cookies.accessToken;
     if (!token) {
       return res.status(401).json({
         success: false,
