@@ -235,20 +235,28 @@ export const paymentController = {
           error_note: "Amount mismatch",
         });
       }
-
+      const merchantPrepareId = Math.floor(Date.now() / 1000);
       // Обновляем платеж
       await payment.update({
         clickTransId: String(params.click_trans_id),
         clickPaydocId: String(params.click_paydoc_id),
+        merchantPrepareId: merchantPrepareId,
         status: "processing",
         prepareTime: new Date(),
       });
 
+      console.log({
+        click_trans_id: Number(params.click_trans_id) || 0,
+        merchant_trans_id: merchantTransId,
+        merchant_prepare_id: merchantPrepareId,
+        error: ClickError.SUCCESS,
+        error_note: "Success",
+      });
       // Ответ CLICK
       res.json({
         click_trans_id: Number(params.click_trans_id) || 0,
         merchant_trans_id: merchantTransId,
-        merchant_prepare_id: payment.id, // оставляем стабильным
+        merchant_prepare_id: merchantPrepareId,
         error: ClickError.SUCCESS,
         error_note: "Success",
       });
@@ -268,50 +276,101 @@ export const paymentController = {
     try {
       const params = req.body;
 
-      // Лог запроса
       console.log("Complete request:", JSON.stringify(params, null, 2));
 
+      const clickTransId = Number(params.click_trans_id) || 0;
       const merchantTransId = String(params.merchant_trans_id);
+      const merchantPrepareId = Number(params.merchant_prepare_id);
+      const error = Number(params.error) || 0;
 
-      // Ищем платеж по ID
+      // 🔍 Ищем платеж
       const payment = await Payment.findOne({
         where: {
           id: merchantTransId,
-          status: "processing",
         },
       });
 
       if (!payment) {
-        console.log(`Payment not found: merchant_trans_id=${merchantTransId}`);
+        console.log(`Payment not found: ${merchantTransId}`);
+
         return res.json({
-          click_trans_id: Number(params.click_trans_id) || 0,
+          click_trans_id: clickTransId,
           merchant_trans_id: merchantTransId,
           error: ClickError.TRANSACTION_NOT_FOUND,
           error_note: "Payment not found",
         });
       }
 
-      // Обновляем платеж как успешный
+      // 🔁 Защита от повторных запросов
+      if (payment.status === "paid") {
+        return res.json({
+          click_trans_id: clickTransId,
+          merchant_trans_id: merchantTransId,
+          merchant_confirm_id: payment.merchantConfirmId,
+          error: ClickError.SUCCESS,
+          error_note: "Already completed",
+        });
+      }
+
+      // // ❗ Проверка merchant_prepare_id
+      // if (payment.merchantPrepareId !== merchantPrepareId) {
+      //   console.log("merchant_prepare_id mismatch");
+
+      //   return res.json({
+      //     click_trans_id: clickTransId,
+      //     merchant_trans_id: merchantTransId,
+      //     error: ClickError.INVALID_TRANSACTION,
+      //     error_note: "merchant_prepare_id mismatch",
+      //   });
+      // }
+
+      // ❗ Если CLICK прислал ошибку (отмена)
+      if (error < 0) {
+        await payment.update({
+          status: "failed",
+          errorCode: error,
+          errorNote: params.error_note || "Cancelled by CLICK",
+        });
+
+        return res.json({
+          click_trans_id: clickTransId,
+          merchant_trans_id: merchantTransId,
+          error: ClickError.TRANSACTION_CANCELLED,
+          error_note: "Transaction cancelled",
+        });
+      }
+
+      // ✅ Генерим merchant_confirm_id (int)
+      const merchantConfirmId = Math.floor(Date.now() / 1000);
+
+      // ✅ Успешное завершение
       await payment.update({
         status: "paid",
         clickTransId: String(params.click_trans_id),
         clickPaydocId: String(params.click_paydoc_id),
+        merchantConfirmId: merchantConfirmId,
         completeTime: new Date(),
         errorCode: ClickError.SUCCESS,
       });
 
-      console.log(`Payment completed: ${payment.id}`);
-
-      res.json({
-        click_trans_id: Number(params.click_trans_id) || 0,
+      console.log({
+        click_trans_id: clickTransId,
         merchant_trans_id: merchantTransId,
-        merchant_confirm_id: payment.id,
+        merchant_confirm_id: merchantConfirmId, // ✅ int
+        error: ClickError.SUCCESS,
+        error_note: "Success",
+      });
+      return res.json({
+        click_trans_id: clickTransId,
+        merchant_trans_id: merchantTransId,
+        merchant_confirm_id: merchantConfirmId, // ✅ int
         error: ClickError.SUCCESS,
         error_note: "Success",
       });
     } catch (error) {
       console.error("Complete error:", error);
-      res.json({
+
+      return res.json({
         click_trans_id: Number(req.body.click_trans_id) || 0,
         merchant_trans_id: String(req.body.merchant_trans_id) || "",
         error: ClickError.INTERNAL_ERROR,

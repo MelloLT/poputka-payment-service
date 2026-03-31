@@ -13,7 +13,7 @@ export interface PaymentAttributes {
   clickTransId?: string;
   clickPaydocId?: string;
   merchantPrepareId?: number;
-  merchantConfirmId?: string;
+  merchantConfirmId?: number;
   errorCode?: number;
   errorNote?: string;
   prepareTime?: Date;
@@ -63,7 +63,7 @@ class Payment
   public clickTransId?: string;
   public clickPaydocId?: string;
   public merchantPrepareId?: number;
-  public merchantConfirmId?: string;
+  public merchantConfirmId?: number;
   public errorCode?: number;
   public errorNote?: string;
   public prepareTime?: Date;
@@ -130,7 +130,7 @@ Payment.init(
       allowNull: true,
     },
     merchantConfirmId: {
-      type: DataTypes.STRING,
+      type: DataTypes.NUMBER,
       allowNull: true,
     },
     errorCode: {
