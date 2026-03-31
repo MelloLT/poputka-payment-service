@@ -130,7 +130,7 @@ Payment.init(
       allowNull: true,
     },
     merchantConfirmId: {
-      type: DataTypes.NUMBER,
+      type: DataTypes.INTEGER,
       allowNull: true,
     },
     errorCode: {
