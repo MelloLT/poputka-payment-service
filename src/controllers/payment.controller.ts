@@ -4,6 +4,7 @@ import clickService from "../services/click.service";
 import { ClickError } from "../types/click.types";
 import { sendSuccess, sendError } from "../utils/responseHelper";
 import { Op } from "sequelize";
+import axios from "axios";
 
 // Вспомогательная функция для проверки активной заявки
 async function getActivePayment(
@@ -283,7 +284,7 @@ export const paymentController = {
       const merchantPrepareId = Number(params.merchant_prepare_id);
       const error = Number(params.error) || 0;
 
-      // 🔍 Ищем платеж
+      // Ищем платеж
       const payment = await Payment.findOne({
         where: {
           id: merchantTransId,
@@ -301,7 +302,7 @@ export const paymentController = {
         });
       }
 
-      // 🔁 Защита от повторных запросов
+      //Защита от повторных запросов
       if (payment.status === "paid") {
         return res.json({
           click_trans_id: clickTransId,
@@ -312,19 +313,6 @@ export const paymentController = {
         });
       }
 
-      // // ❗ Проверка merchant_prepare_id
-      // if (payment.merchantPrepareId !== merchantPrepareId) {
-      //   console.log("merchant_prepare_id mismatch");
-
-      //   return res.json({
-      //     click_trans_id: clickTransId,
-      //     merchant_trans_id: merchantTransId,
-      //     error: ClickError.INVALID_TRANSACTION,
-      //     error_note: "merchant_prepare_id mismatch",
-      //   });
-      // }
-
-      // ❗ Если CLICK прислал ошибку (отмена)
       if (error < 0) {
         await payment.update({
           status: "failed",
@@ -340,10 +328,10 @@ export const paymentController = {
         });
       }
 
-      // ✅ Генерим merchant_confirm_id (int)
+      // Генерим merchant_confirm_id (int)
       const merchantConfirmId = Math.floor(Date.now() / 1000);
 
-      // ✅ Успешное завершение
+      // Успешное завершение
       await payment.update({
         status: "paid",
         clickTransId: String(params.click_trans_id),
@@ -352,18 +340,40 @@ export const paymentController = {
         completeTime: new Date(),
         errorCode: ClickError.SUCCESS,
       });
+      try {
+        const backendUrl = process.env.BACKEND_URL || "http://localhost:5000";
+        console.log(`Notifying backend about paid trip: ${payment.tripId}`);
 
+        await axios.post(
+          `${backendUrl}/api/payment/callback`,
+          {
+            tripId: payment.tripId,
+            paymentId: payment.id,
+            userId: payment.userId,
+          },
+          {
+            headers: {
+              "Content-Type": "application/json",
+            },
+            timeout: 5000,
+          },
+        );
+
+        console.log(`Successfully notified backend for trip ${payment.tripId}`);
+      } catch (callbackError) {
+        console.error("Failed to notify backend:", callbackError);
+      }
       console.log({
         click_trans_id: clickTransId,
         merchant_trans_id: merchantTransId,
-        merchant_confirm_id: merchantConfirmId, // ✅ int
+        merchant_confirm_id: merchantConfirmId,
         error: ClickError.SUCCESS,
         error_note: "Success",
       });
       return res.json({
         click_trans_id: clickTransId,
         merchant_trans_id: merchantTransId,
-        merchant_confirm_id: merchantConfirmId, // ✅ int
+        merchant_confirm_id: merchantConfirmId,
         error: ClickError.SUCCESS,
         error_note: "Success",
       });
