@@ -80,7 +80,7 @@ export const paymentController = {
         amount: Math.abs(amount),
         description: description || `Оплата поездки ${tripId}`,
         status: "pending",
-        expiresAt: new Date(Date.now() + 1 * 60 * 1000),
+        expiresAt: new Date(Date.now() + 15 * 60 * 1000),
       });
 
       console.log(
