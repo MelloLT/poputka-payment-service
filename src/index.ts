@@ -17,7 +17,7 @@ setInterval(async () => {
   }
 }, 60 * 1000);
 const app = express();
-const PORT = 5001;
+const PORT = Number(process.env.PORT) || 5001;
 // Middleware
 app.use(
   cors({
