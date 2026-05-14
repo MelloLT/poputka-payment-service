@@ -4,12 +4,20 @@ import dotenv from "dotenv";
 import sequelize from "./config/database";
 import cookieParser from "cookie-parser";
 import paymentRoutes from "./routes/payment.routes";
+import { checkAndExpireOldPayments } from "./controllers/payment.controller";
 import "./models/Payment";
 
 dotenv.config();
-
+setInterval(async () => {
+  try {
+    console.log("УДАЛИЛИ")
+    await checkAndExpireOldPayments();
+  } catch (error) {
+    console.error("Expire payments error:", error);
+  }
+}, 60 * 1000);
 const app = express();
-const PORT = Number(process.env.PORT) || 5001;
+const PORT = 5001;
 // Middleware
 app.use(
   cors({

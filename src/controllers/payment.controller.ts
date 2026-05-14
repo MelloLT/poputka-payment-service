@@ -22,18 +22,25 @@ async function getActivePayment(
 }
 
 // Вспомогательная функция для проверки истечения срока
-async function checkAndExpireOldPayments() {
-  await Payment.update(
+export async function checkAndExpireOldPayments() {
+  const [updatedCount] = await Payment.update(
     { status: "expired" },
     {
       where: {
-        status: ["pending", "processing"],
-        expiresAt: { [Op.lt]: new Date() },
+        status: {
+          [Op.in]: ["pending", "processing"],
+        },
+        expiresAt: {
+          [Op.lt]: new Date(),
+        },
       },
     },
   );
-}
 
+  if (updatedCount > 0) {
+    console.log(`Expired payments: ${updatedCount}`);
+  }
+}
 export const paymentController = {
   async createOrder(req: Request, res: Response) {
     try {
@@ -73,7 +80,7 @@ export const paymentController = {
         amount: Math.abs(amount),
         description: description || `Оплата поездки ${tripId}`,
         status: "pending",
-        expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+        expiresAt: new Date(Date.now() + 1 * 60 * 1000),
       });
 
       console.log(
