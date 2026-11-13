@@ -361,6 +361,9 @@ export const paymentController = {
           {
             headers: {
               "Content-Type": "application/json",
+              ...(process.env.INTERNAL_API_SECRET
+                ? { "x-internal-secret": process.env.INTERNAL_API_SECRET }
+                : {}),
             },
             timeout: 5000,
           },
